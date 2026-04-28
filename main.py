@@ -369,7 +369,7 @@ DEMO_PARCEL_DATA: pd.DataFrame | None = None
 DEMO_CShape_Vals_PATH = Path(__file__).parent / "data" / "parcel_example.cshape_vals"
 if DEMO_CShape_Vals_PATH.exists():
     try:
-        df_demo = pd.read_cshape_vals(DEMO_CShape_Vals_PATH, dtype=str)
+        df_demo = pd.read_csv(DEMO_CShape_Vals_PATH, dtype=str)
         DEMO_PARCEL_DATA = normalise_parcel_cols(df_demo)
         print(f"[startup] demo parcel CShape_Vals loaded: {len(DEMO_PARCEL_DATA)} rows")
     except Exception as e:
@@ -387,7 +387,7 @@ async def upload_parcel_data(
     file: UploadFile = File(...),
 ):
     contents = await file.read()
-    df = pd.read_cshape_vals(io.BytesIO(contents), dtype=str)
+    df = pd.read_csv(io.BytesIO(contents), dtype=str)
     PARCEL_DATA[current_user.id] = normalise_parcel_cols(df)
     udf = PARCEL_DATA[current_user.id]
     return JSONResponse({"status": "ok", "rows": len(udf), "columns": list(udf.columns)})
