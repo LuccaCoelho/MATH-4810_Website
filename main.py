@@ -51,7 +51,7 @@ _lin_model           = _lin["model"]
 _sel_names           = _lin["sel_names"]
 _Xc_tr_cols          = _lin["Xc_tr_cols"]
 _X_tr_v4_cols        = _lin["X_tr_v4_cols"]
-_lin_seg_defaults    = _lin["seg_defaults"]
+_lin_nbhd_defaults    = _lin.get("nbhd_defaults", _lin.get("seg_defaults", {}))
 _lin_global_defaults = _lin["global_defaults"]
 _lin_pi_q            = _lin["pi_q"]
 _lin_pi_q_global     = _lin["pi_q_global"]
@@ -65,7 +65,23 @@ _key_numeric         = _lin["key_numeric"]
 _nl_model        = _nl["model"]
 _orig_of         = _nl["orig_of"]
 _X_train_cols    = _nl["X_train_cols"]
-_nl_seg_defaults = _nl["seg_defaults"]
+# Pre-compute which columns in X_train are NbhdCode2 dummies so we can zero them reliably
+_nl_nbhd_dummy_cols = [
+    c for c in _X_train_cols
+    if _orig_of.get(c, "").startswith("NbhdCode2_") or "NbhdCode2_" in _orig_of.get(c, "")
+]
+# Pre-compute parcel identifier columns to always zero out during prediction
+# Check both the original name (via _orig_of) AND the cleaned column name itself
+_parcel_id_cols = [
+    c for c in _X_train_cols
+    if any(p in _orig_of.get(c, "").lower() for p in
+           ("parcelnumber", "parcel_number", "parcelid", "parcel_id", "parcel"))
+    or any(p in c.lower() for p in
+           ("parcelnumber", "parcel_number", "parcelid", "parcel_id", "parcelno"))
+]
+print(f"[startup] all model columns: {list(_X_train_cols)[:20]} ...")
+print(f"[startup] parcel columns found in model (will be zeroed): {_parcel_id_cols}")
+_nl_nbhd_defaults = _nl.get("nbhd_defaults", _nl.get("seg_defaults", {}))
 _nl_pi_q         = _nl["pi_q"]
 _nl_pi_q_global  = _nl["pi_q_global"]
 _base_val        = _nl["base_val"]
@@ -190,9 +206,9 @@ def predict_price_linear(**feats) -> dict:
     nbhd    = feats.pop("NbhdCode2", None)
     segment = feats.pop("segment", "Residential")
 
-    # seg_defaults is keyed by segment string (matches QMD)
+    # nbhd_defaults is keyed by NbhdCode2 (matches QMD)
     row = pd.Series(
-        _lin_seg_defaults.get(segment, _lin_global_defaults)
+        _lin_nbhd_defaults.get(nbhd, _lin_global_defaults)
     ).fillna(0.0)
 
     for c in row.index:
@@ -202,6 +218,10 @@ def predict_price_linear(**feats) -> dict:
     if seg_col in row.index:
         row[seg_col] = 1
 
+    # Zero out all NbhdCode2 dummies from the median row before setting the correct one
+    for c in row.index:
+        if c.startswith("NbhdCode2_"):
+            row[c] = 0
     if nbhd is not None:
         _lin_set_dummy(row, "NbhdCode2", nbhd)
 
@@ -222,7 +242,7 @@ def predict_price_linear(**feats) -> dict:
     )
 
     log_pred = float(_lin_model.predict(Xc_row).iloc[0])
-    q_lo, q_hi = _lin_pi_q.get(segment, _lin_pi_q_global)
+    q_lo, q_hi = _lin_pi_q.get(nbhd, _lin_pi_q_global)
 
     # ── Log-scale % contributions grouped by original feature ────────────────
     # In a log-linear model: log(price) = intercept + Σ βᵢ·xᵢ
@@ -307,16 +327,23 @@ def predict_price_nonlinear(**feats) -> dict:
 
     row = pd.Series(0.0, index=_X_train_cols)
 
-    # seg_defaults is keyed by segment string (matches QMD)
-    for k, v in _nl_seg_defaults.get(segment, {}).items():
+    # nbhd_defaults is keyed by NbhdCode2 (matches QMD)
+    for k, v in _nl_nbhd_defaults.get(nbhd, {}).items():
         cl = _clean(k)
         if cl in row.index:
             row[cl] = v
+
+    # Zero out parcel identifier columns — they should never influence the prediction
+    for c in _parcel_id_cols:
+        row[c] = 0
 
     seg_col = f"segment_{segment}"
     if seg_col in row.index:
         row[seg_col] = 1
 
+    # Zero out all NbhdCode2 dummies from the median row before setting the correct one
+    for c in _nl_nbhd_dummy_cols:
+        row[c] = 0
     if nbhd is not None:
         _nl_set_dummy(row, "NbhdCode2", nbhd)
 
@@ -330,8 +357,8 @@ def predict_price_nonlinear(**feats) -> dict:
 
     X_row    = row.to_frame().T
     log_pred = float(_nl_model.predict(X_row)[0])
-    # PI quantiles keyed by segment (matches QMD)
-    q_lo, q_hi = _nl_pi_q.get(segment, _nl_pi_q_global)
+    # PI quantiles keyed by NbhdCode2 (matches QMD)
+    q_lo, q_hi = _nl_pi_q.get(nbhd, _nl_pi_q_global)
 
     sv    = _explainer.shap_values(X_row)[0]
     order = np.argsort(-np.abs(sv))[:15]
@@ -423,10 +450,12 @@ async def lookup_parcel(parcel_id: str, current_user: CurrentUser):
         raise HTTPException(status_code=404, detail="Parcel not found")
 
     row = match.iloc[0].to_dict()
+    # Log all normalized column names to help debug autofill mismatches
     normalized = {
         str(k).strip().lower().replace(" ", "_"): (None if pd.isna(v) else v)
         for k, v in row.items()
     }
+    print(f"[parcel lookup] all normalized columns: {sorted(normalized.keys())}")
     return JSONResponse(content=normalized)
 
 
@@ -439,6 +468,86 @@ async def main_page(request: Request, current_user: CurrentUser):
 @app.get("/main/nonlinear", include_in_schema=False)
 async def nonlinear_page(request: Request, current_user: CurrentUser):
     return templates.TemplateResponse(request, "main_nonlinear.html", {})
+
+
+# ── Similar houses via KNN on parcel CSV ─────────────────────────────────────
+def _find_similar(parcel_id: str, n: int = 5) -> list:
+    """
+    Return up to n similar properties from the uploaded parcel CSV,
+    excluding the queried parcel itself. Uses KNN on numeric features.
+    Returns list of dicts with display fields.
+    """
+    if PARCEL_DATA is None or not parcel_id:
+        return []
+
+    df = PARCEL_DATA.copy()
+
+    # Find parcel column
+    col = next((c for c in df.columns if c in
+                ("parcelnumber", "parcel_number", "parcelid", "parcel_id")), None)
+    if col is None:
+        return []
+
+    # Features to match on — same ones the model cares about
+    match_cols = [c for c in [
+        "totgla", "acreage", "quality_weighted", "effyearbuilt_weighted",
+        "fullbaths_total", "halfbaths_total", "garagearea", "total_value"
+    ] if c in df.columns]
+
+    if not match_cols:
+        return []
+
+    # Coerce to numeric, drop rows missing all match cols
+    for c in match_cols:
+        df[c] = pd.to_numeric(
+            df[c].astype(str).str.replace(r'[$,\s]', '', regex=True),
+            errors='coerce'
+        )
+    df = df.dropna(subset=match_cols)
+
+    # Find the query row
+    query_mask = df[col].astype(str).str.strip() == str(parcel_id).strip()
+    if query_mask.sum() == 0:
+        return []
+
+    query_row = df[query_mask].iloc[0][match_cols].values.astype(float)
+    others    = df[~query_mask].copy()
+
+    if len(others) < 1:
+        return []
+
+    # Normalize and compute Euclidean distances
+    X = others[match_cols].values.astype(float)
+    std = X.std(axis=0)
+    std[std == 0] = 1  # avoid division by zero
+    X_norm     = (X - X.mean(axis=0)) / std
+    q_norm     = (query_row - X.mean(axis=0)) / std
+    distances  = np.sqrt(((X_norm - q_norm) ** 2).sum(axis=1))
+    top_idx    = np.argsort(distances)[:n]
+    similar    = others.iloc[top_idx]
+
+    results = []
+    for _, row in similar.iterrows():
+        # Try to get a sale/trended price for display
+        price = None
+        for pc in ["sold_price", "soldprice", "sale_price", "saleprice"]:
+            if pc in row and row[pc] not in (None, ""):
+                try:
+                    price = float(str(row[pc]).replace("$", "").replace(",", "").strip())
+                    break
+                except:
+                    pass
+
+        results.append({
+            "parcel_id":   str(row.get(col, "—")),
+            "gla":         int(float(row["totgla"])) if "totgla" in row and pd.notna(row["totgla"]) else None,
+            "year_built":  int(float(row["effyearbuilt_weighted"])) if "effyearbuilt_weighted" in row and pd.notna(row["effyearbuilt_weighted"]) else None,
+            "acreage":     round(float(row["acreage"]), 2) if "acreage" in row and pd.notna(row["acreage"]) else None,
+            "quality":     round(float(row["quality_weighted"]), 1) if "quality_weighted" in row and pd.notna(row["quality_weighted"]) else None,
+            "price":       price,
+        })
+
+    return results
 
 
 # ── LINEAR PREDICT ────────────────────────────────────────────────────────────
@@ -454,12 +563,12 @@ def predict_linear(
     full_baths: int        = Form(...),
     half_baths: int        = Form(...),
     basement_sqft: float   = Form(0.0),
-    bsmt_pct_finish: float = Form(0.0),
     garage_area: float     = Form(0.0),
     garage_capacity: int   = Form(0),
     quality_weighted: float = Form(...),
     prop_type: str         = Form("Single Family Res"),
-    main_style: str        = Form(""),
+    nbhd_code2: str        = Form(""),
+    total_value: float     = Form(...),
     parcel_id: str         = Form(""),
 ):
     feats: dict = {
@@ -474,10 +583,10 @@ def predict_linear(
         "Quality_Weighted":      quality_weighted,
         "PropTypeDescription":   prop_type,
     }
-    feats["Tot Bsmt"]               = basement_sqft
-    feats["BsmtFinishPct_Weighted"] = bsmt_pct_finish
-    if main_style:
-        feats["Main_StyleDesc"] = main_style
+    feats["Tot Bsmt"] = basement_sqft
+    if nbhd_code2.strip():
+        feats["NbhdCode2"] = nbhd_code2.strip()
+    feats["Total Value"] = total_value
 
     result = predict_price_linear(**feats)
 
@@ -511,6 +620,7 @@ def predict_linear(
             "lin_diag":          LIN_DIAG,
             "baseline_dollars":  0,
             "parcel_id":         parcel_id.strip() or None,
+            "similar_houses":    _find_similar(parcel_id.strip()) if parcel_id.strip() else [],
         },
     )
 
@@ -528,12 +638,12 @@ def predict_nonlinear(
     full_baths: int        = Form(...),
     half_baths: int        = Form(...),
     basement_sqft: float   = Form(0.0),
-    bsmt_pct_finish: float = Form(0.0),
     garage_area: float     = Form(0.0),
     garage_capacity: int   = Form(0),
     quality_weighted: float = Form(...),
     prop_type: str         = Form("Single Family Res"),
-    main_style: str        = Form(""),
+    nbhd_code2: str        = Form(""),
+    total_value: float     = Form(...),
     parcel_id: str         = Form(""),
 ):
     feats: dict = {
@@ -548,10 +658,10 @@ def predict_nonlinear(
         "Quality_Weighted":      quality_weighted,
         "PropTypeDescription":   prop_type,
     }
-    feats["Tot Bsmt"]               = basement_sqft
-    feats["BsmtFinishPct_Weighted"] = bsmt_pct_finish
-    if main_style:
-        feats["Main_StyleDesc"] = main_style
+    feats["Tot Bsmt"] = basement_sqft
+    if nbhd_code2.strip():
+        feats["NbhdCode2"] = nbhd_code2.strip()
+    feats["Total Value"] = total_value
 
     result = predict_price_nonlinear(**feats)
 
@@ -584,6 +694,7 @@ def predict_nonlinear(
             "segment":           result["segment_used"],
             "n_features":        None,
             "parcel_id":         parcel_id.strip() or None,
+            "similar_houses":    _find_similar(parcel_id.strip()) if parcel_id.strip() else [],
         },
     )
 

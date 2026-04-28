@@ -35,15 +35,29 @@ async function lookupParcel() {
       const val = data[csvCol.toLowerCase()];
       if (val !== null && val !== undefined) {
         if (el.tagName === 'SELECT') {
-          const opt = [...el.options].find(o => o.value === String(val).trim().toUpperCase());
-          if (opt) { el.value = opt.value; el.closest('.field').classList.add('filled'); filled++; }
+          const strVal = String(val).trim();
+          // Try exact match first, then case-insensitive
+          const opt = [...el.options].find(o => o.value === strVal)
+                   || [...el.options].find(o => o.value.toLowerCase() === strVal.toLowerCase());
+          if (opt) { el.value = opt.value; el.closest('.field').classList.add('filled'); filled++;
+          }
         } else {
-          el.value = val;
+          // Strip dollar signs and commas for number inputs (e.g. "$320,000.00" → "320000")
+          let cleanVal = String(val).replace(/[$,\s]/g, '');
+          el.value = cleanVal;
           el.classList.add('autofilled');
           el.closest('.field').classList.add('filled');
           filled++;
         }
       }
+    }
+
+    // Populate hidden nbhd_code2 — try all likely column name variants
+    const hiddenNbhd = document.getElementById('hidden-nbhd-code2');
+    if (hiddenNbhd) {
+      const nbhdVal = data['nbhdcode2'] ?? data['nbhd_code2'] ?? data['nbhdcode']
+                   ?? data['nbhd_code'] ?? data['neighborhoodcode2'] ?? data['neighborhood_code2'] ?? '';
+      hiddenNbhd.value = String(nbhdVal === null ? '' : nbhdVal).trim();
     }
 
     status.textContent = `${filled}/${totalFields} FILLED`;

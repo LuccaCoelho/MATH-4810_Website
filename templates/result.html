@@ -115,6 +115,35 @@
   <div style="border:1px solid var(--border);padding:28px;font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;margin-bottom:40px;">No feature contributions available.</div>
   {% endif %}
 
+  <!-- Similar Houses — only shown when parcel lookup was used -->
+  {% if similar_houses %}
+  <div class="section-label">Comparable Properties</div>
+  <table class="history-table">
+    <thead>
+      <tr>
+        <th>Parcel</th>
+        <th>GLA (sq ft)</th>
+        <th>Year Built</th>
+        <th>Acreage</th>
+        <th>Quality</th>
+        <th>Sold Price</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for h in similar_houses %}
+      <tr class="data-row">
+        <td class="td-date">{{ h.parcel_id }}</td>
+        <td class="td-date">{{ "{:,}".format(h.gla) if h.gla else "—" }}</td>
+        <td class="td-date">{{ h.year_built if h.year_built else "—" }}</td>
+        <td class="td-date">{{ h.acreage if h.acreage else "—" }}</td>
+        <td class="td-date">{{ h.quality if h.quality else "—" }}</td>
+        <td class="td-result">{{ "${:,.0f}".format(h.price) if h.price else "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
 </main>
 
 <!-- Jinja data injected as JS globals, consumed by main.js -->
