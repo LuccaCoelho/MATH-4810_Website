@@ -37,11 +37,7 @@ class Valuation(Base):
     pi_lo: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     pi_hi: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     baseline_dollars: Mapped[Optional[float]] = mapped_column(Float, nullable=True, default=0.0)
-
-    # Feature contributions — three parallel lists
-    # features  : list[str]   — human-readable feature group names
-    # coefs     : list[float] — dollar impact per feature
-    # feat_vals : list[float] — raw feature value (nonlinear only; empty list for linear)
+    
     features: Mapped[list] = mapped_column(JSON, nullable=False)
     coefs: Mapped[list] = mapped_column(JSON, nullable=False)
     feat_vals: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, default=list)
