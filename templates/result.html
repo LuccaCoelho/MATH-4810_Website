@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VALUATION SYSTEM — RESULT</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+
+<header>
+  <span class="brand">math4810 // VALUATION ENGINE</span>
+  <nav>
+    <a href="/main">NEW VALUATION</a>
+    <a href="/history">HISTORY</a>
+    <a href="/logout">LOGOUT</a>
+  </nav>
+</header>
+
+<main>
+
+  <!-- Hero -->
+  <div class="result-hero">
+    <div class="result-top">
+      <div>
+        <div class="result-label">Estimated Market Value — {{ model_type }}</div>
+        <div class="result-price">${{ "{:,.0f}".format(predicted_price) }}</div>
+      </div>
+      <div class="result-meta">
+        {{ model_type | upper }}<br>
+        SEGMENT: {{ segment | upper }}<br>
+        {% if n_features %}{{ n_features }} FEATURES SELECTED{% endif %}
+      </div>
+    </div>
+    <div class="pi-row">
+      <span class="pi-label">95% PI</span>
+      <div class="pi-track">
+        {% set spread = pi_hi - pi_lo %}
+        {% set pct_pred = ((predicted_price - pi_lo) / spread * 100) | round(1) if spread > 0 else 50 %}
+        <div class="pi-fill" style="left:0%;width:100%;"></div>
+        <div class="pi-tick" style="left:{{ pct_pred }}%;"></div>
+      </div>
+      <span class="pi-bounds">${{ "{:,.0f}".format(pi_lo) }} – ${{ "{:,.0f}".format(pi_hi) }}</span>
+    </div>
+  </div>
+
+  <!-- Actions -->
+  <div class="action-row">
+    <a href="/main" class="btn btn-primary">← NEW VALUATION</a>
+    <a href="/history" class="btn">VIEW HISTORY</a>
+  </div>
+
+  <!-- LINEAR — 3 Diagnostic Plots -->
+  {% if lin_diag %}
+  <div class="section-label">Model Diagnostics — Lasso → OLS</div>
+  <div class="diag-grid" id="diag-grid"></div>
+  {% endif %}
+
+  <!-- NONLINEAR — Waterfall charts -->
+  {% if not lin_diag %}
+  <div class="section-label">Price Build-Up — SHAP Waterfall</div>
+  <div class="chart-wrap">
+    <svg id="waterfall-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+  <div class="section-label" style="margin-top:40px;">Feature Contributions — SHAP Stack</div>
+  <div class="chart-wrap" style="overflow-x:auto;">
+    <svg id="shap-stack-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+  {% endif %}
+
+  <!-- Contributions table -->
+  <div class="section-label">Feature Contributions — Dollar Impact</div>
+
+  {% if top_contributions %}
+  {% set max_abs = namespace(val=0.001) %}
+  {% for row in top_contributions %}
+    {% if (row[1] | abs) > max_abs.val %}{% set max_abs.val = row[1] | abs %}{% endif %}
+  {% endfor %}
+
+  <table class="contrib-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Feature</th>
+        {% if top_contributions[0] | length > 2 %}<th>Value</th>{% endif %}
+        <th>Impact</th>
+        <th>Δ Price</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in top_contributions %}
+      {% set val = row[1] %}
+      {% set pct_bar = ((val | abs) / max_abs.val * 100) | round(1) %}
+      <tr>
+        <td class="td-rank">{{ loop.index }}</td>
+        <td class="td-name">{{ row[0] }}</td>
+        {% if row | length > 2 %}
+        <td class="td-feat-val">{{ "{:,.2f}".format(row[2]) }}</td>
+        {% endif %}
+        <td class="td-bar">
+          <div class="bar-track">
+            <div class="bar-fill {{ 'bar-pos' if val >= 0 else 'bar-neg' }}" style="width:{{ pct_bar }}%"></div>
+          </div>
+        </td>
+        <td class="td-value {{ 'pos' if val >= 0 else 'neg' }}">
+          {{ '+$' if val >= 0 else '-$' }}{{ "{:,.0f}".format(val | abs) }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div style="border:1px solid var(--border);padding:28px;font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;margin-bottom:40px;">No feature contributions available.</div>
+  {% endif %}
+
+</main>
+
+<!-- Jinja data injected as JS globals, consumed by main.js -->
+<script>
+  const PREDICTED = {{ predicted_price | round | int }};
+  const PI_LO     = {{ pi_lo | round | int }};
+  const PI_HI     = {{ pi_hi | round | int }};
+  const BASELINE  = {{ baseline_dollars | default(0) | round | int }};
+  const RAW       = {{ top_contributions | tojson }};
+  const LIN_DIAG  = {{ lin_diag | tojson if lin_diag else 'null' }};
+</script>
+<script src="/static/js/main.js"></script>
+
+</body>
+</html>

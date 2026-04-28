@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VALUATION SYSTEM — HISTORY</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+
+  <header>
+    <span class="brand">math4810 // VALUATION ENGINE</span>
+    <nav>
+      <a href="/main">NEW VALUATION</a>
+      <a href="/history" class="active">HISTORY</a>
+      <a href="/logout">LOGOUT</a>
+    </nav>
+  </header>
+
+  <main class="history-main">
+
+    <div class="page-header">
+      <div>
+        <div class="page-label">Valuation Archive</div>
+        <div class="page-title">HISTORY</div>
+      </div>
+      <div class="record-count">
+        {% if valuations %}{{ valuations | length }} RECORD{{ 's' if valuations | length != 1 else '' }}{% endif %}
+      </div>
+    </div>
+
+    {% if valuations %}
+    <table class="history-table" id="histTable">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Date</th>
+          <th>Time</th>
+          <th>Model</th>
+          <th>Features</th>
+          <th>Result</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in valuations | sort(attribute='created_at', reverse=True) %}
+        <tr class="data-row" onclick="window.location='/history/{{ v.id }}'">
+          <td class="td-id">{{ v.id }}</td>
+          <td class="td-date">{{ v.created_at.strftime('%Y-%m-%d') }}</td>
+          <td class="td-date">{{ v.created_at.strftime('%H:%M:%S') }}</td>
+          <td class="td-model">{{ v.model_type | upper }}</td>
+          <td>{{ v.features | length }} features</td>
+          <td class="td-result">${{ "{:,.0f}".format(v.valuation_result) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% else %}
+    <div class="empty-state">
+      <p>NO VALUATIONS ON RECORD</p>
+      <a href="/main" class="btn">RUN FIRST VALUATION →</a>
+    </div>
+    {% endif %}
+
+  </main>
+
+  <script src="/static/js/main.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VALUATION SYSTEM — LOGIN</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+
+  <span class="brand-fixed">math4810 // VALUATION ENGINE</span>
+  <div class="status"><span class="status-dot"></span>SYSTEM ONLINE</div>
+
+  <div class="wrapper">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">Login</div>
+      </div>
+
+      <form method="POST" action="/login" id="loginForm">
+        <div class="login-field">
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username" placeholder="enter username" autocomplete="off" required />
+        </div>
+        <div class="login-field">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" placeholder="••••••••" required />
+        </div>
+
+        <div class="error-msg" id="errMsg">
+          {% if error %} ⚠ {{ error }} {% endif %}
+        </div>
+
+        <button type="submit" class="login-btn">ENTER SYSTEM →</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="/static/js/main.js"></script>
+
+</body>
+</html>

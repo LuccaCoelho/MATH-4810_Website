@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VALUATION SYSTEM — NON-LINEAR MODEL</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/styles.css">
+  <!-- Blue accent for the non-linear model page -->
+  <style>
+    :root { --accent: var(--blue); --accent-dim: var(--blue-dim); }
+  </style>
+</head>
+<body>
+
+  <header>
+    <span class="brand">math4810 // VALUATION ENGINE</span>
+    <nav>
+      <a href="/main" class="active">NEW VALUATION</a>
+      <a href="/history">HISTORY</a>
+      <a href="/logout">LOGOUT</a>
+    </nav>
+  </header>
+
+  <div class="model-switcher">
+    <a href="/main" class="model-tab">Linear Model <span class="badge">OLS</span></a>
+    <a href="/main/nonlinear" class="model-tab active">Non-Linear Model <span class="badge">LightGBM</span></a>
+  </div>
+
+  <div class="upload-banner">
+    <span class="upload-banner-label warn" id="upload-label">⚠ PARCEL DATA NOT LOADED</span>
+    <label class="upload-btn-label" for="parcel-file-input">UPLOAD CSV ↑</label>
+    <input type="file" id="parcel-file-input" accept=".csv">
+    <span id="upload-status">Upload final_adjusted.csv to enable parcel lookup</span>
+  </div>
+
+  <main>
+    <div class="page-label">Model Input — Non-Linear</div>
+    <div class="page-title">PROPERTY FEATURES</div>
+
+    <div class="parcel-lookup">
+      <div class="parcel-lookup-label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
+        </svg>
+        PARCEL ID
+      </div>
+      <input id="parcel-input" type="text" autocomplete="off" placeholder="enter parcel ID">
+      <span id="parcel-status">AWAITING ID</span>
+      <button class="lookup-btn" onclick="lookupParcel()">LOOKUP →</button>
+    </div>
+
+    <form method="POST" action="/predict/nonlinear">
+      <div class="form-grid">
+
+        <div class="field full-width">
+          <label>Property Segment <span class="hint">market category</span></label>
+          <select name="segment" id="f_segment">
+            <option value="Residential">Residential</option>
+            <option value="Land Sales">Land Sales</option>
+            <option value="Multi-Family">Multi-Family</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Gross Living Area <span class="hint">sq ft</span></label>
+          <input type="number" step="1" name="gla" id="f_gla" placeholder="e.g. 2400" required />
+        </div>
+        <div class="field">
+          <label>Effective Year Built <span class="hint">weighted</span></label>
+          <input type="number" step="0.1" name="eff_year_built" id="f_eff_year_built" placeholder="e.g. 2005" required />
+        </div>
+
+        <div class="field">
+          <label>Acreage <span class="hint">acres</span></label>
+          <input type="number" step="0.001" name="acreage" id="f_acreage" placeholder="e.g. 0.25" required />
+        </div>
+        <div class="field">
+          <label>Quality Score <span class="hint">1–5 weighted</span></label>
+          <input type="number" step="0.1" min="1" max="5" name="quality_weighted" id="f_quality_weighted" placeholder="e.g. 3.5" required />
+        </div>
+
+        <div class="field">
+          <label>Full Baths</label>
+          <input type="number" step="1" name="full_baths" id="f_full_baths" placeholder="e.g. 2" required />
+        </div>
+        <div class="field">
+          <label>Half Baths</label>
+          <input type="number" step="1" name="half_baths" id="f_half_baths" placeholder="e.g. 1" required />
+        </div>
+
+        <div class="field">
+          <label>Basement Sqft <span class="hint">sq ft</span></label>
+          <input type="number" step="1" name="basement_sqft" id="f_basement_sqft" placeholder="e.g. 800" value="0" />
+        </div>
+        <div class="field">
+          <label>Basement % Finished <span class="hint">0–1</span></label>
+          <input type="number" step="0.01" min="0" max="1" name="bsmt_pct_finish" id="f_bsmt_pct_finish" placeholder="e.g. 0.75" value="0" />
+        </div>
+
+        <div class="field">
+          <label>Garage Area <span class="hint">sq ft</span></label>
+          <input type="number" step="1" name="garage_area" id="f_garage_area" placeholder="e.g. 500" value="0" />
+        </div>
+        <div class="field">
+          <label>Garage Capacity <span class="hint">cars</span></label>
+          <input type="number" step="1" name="garage_capacity" id="f_garage_capacity" placeholder="e.g. 2" value="0" />
+        </div>
+
+        <div class="field">
+          <label>Property Type <span class="hint">optional</span></label>
+          <select name="prop_type" id="f_prop_type" onchange="checkPropType()">
+            <option value="Single Family Res">Single Family Res</option>
+            <option value="Res Condo">Res Condo</option>
+            <option value="Res PUD">Res PUD</option>
+            <option value="Twin Home">Twin Home</option>
+            <option value="Res Plex (2 - 4)">Res Plex (2 - 4)</option>
+            <option value="Manufactured Home">Manufactured Home</option>
+            <option value="Vacant">Vacant Land</option>
+            <option value="other">Other (non-residential)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Neighborhood Code <span class="hint">C / M / V / D</span></label>
+          <select name="nbhd_code" id="f_nbhd_code">
+            <option value="">— select —</option>
+            <option value="C">C</option>
+            <option value="M">M</option>
+            <option value="V">V</option>
+            <option value="D">D</option>
+          </select>
+        </div>
+
+      </div>
+
+      <p class="shap-note">⚡ SHAP EXPLANATIONS ENABLED — results page will show why the model priced this property.</p>
+
+      <div class="proptype-warning" id="proptype-warning">
+        ⚠ <strong>MODEL LIMITATION</strong> — This valuation engine is trained on
+        residential transactions only. Non-residential property types (commercial,
+        industrial, hospitality, etc.) have fundamentally different value drivers
+        — income, zoning, lease terms — that are not captured in this model.
+        The estimate below will likely be unreliable. Proceed with caution.
+      </div>
+
+      <div class="submit-row">
+        <span class="submit-note" id="feature-count">12 FEATURES LOADED</span>
+        <button type="submit" class="submit-btn">RUN NON-LINEAR VALUATION →</button>
+      </div>
+    </form>
+  </main>
+
+  <script>
+    window.FIELD_MAP = {
+      gla:              'totgla',
+      eff_year_built:   'effyearbuilt_weighted',
+      acreage:          'acreage',
+      full_baths:       'fullbaths_total',
+      half_baths:       'halfbaths_total',
+      basement_sqft:    'tot_bsmt',
+      bsmt_pct_finish:  'bsmtfinishpct_weighted',
+      garage_area:      'garagearea',
+      garage_capacity:  'garagecapacity',
+      quality_weighted: 'quality_weighted',
+      nbhd_code:        'nbhdcode2',
+    };
+    window.TOTAL_FIELDS         = Object.keys(window.FIELD_MAP).length;
+    window.PARCEL_INPUT_PATTERN = /[^0-9]/g;
+  </script>
+  <script src="/static/js/main.js"></script>
+
+</body>
+</html>

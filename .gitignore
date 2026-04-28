@@ -1,0 +1,19 @@
+# --- Environment Variables ---
+.env
+.env.local
+.env.*
+
+# --- Python Cache ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- VS Code Settings ---
+.vscode/
+# Note: Keep .vscode/settings.json if you want to share workspace settings
+# but ignore it if they contain local paths or private configurations.
+
+# --- Virtual Environments ---
+venv/
+.venv/
+env/
