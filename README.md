@@ -326,8 +326,8 @@ Then open http://localhost:8000 and log in.
 
 A demo login was put int the deployed webapp using the random house data example.
 
-Username: demo
-Password: demo123
+**Username**: demo
+**Password**: demo123
 
 If the app fails to start, check your `.env` file to ensure the database URL is configured correctly.
 
