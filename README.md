@@ -74,7 +74,7 @@ Highly accurate models are often difficult to explain. Highly explainable models
 
 **Performance**
 - Test R²: ~0.88
-- Dollar MAE: ~$40,000
+- Dollar MAE: ~$34,719
 
 #### Step 1 — Feature Selection with Lasso
 
@@ -112,30 +112,14 @@ The target variable is `log(Trended Price)`, with predictions converted back to 
 ### Non-Linear Model — LightGBM
 
 **Performance**
-- Test R²: ~0.95
-- Dollar MAE: ~$20,000
+- Test R²: ~0.97
+- Dollar MAE: ~$12,239
 
-This is the highest-performing model in the system — by a significant margin.
+This is the highest-performing model in the system.
 
 #### Why It Performs Better
 
 LightGBM uses gradient-boosted decision trees, which allows it to capture non-linear relationships, model feature interactions automatically, perform better on high-value properties, leverage Total Assessed Value more effectively, and avoid assumptions about linearity. Trees optimize for predictive performance without requiring textbook statistical assumptions.
-
-#### Hyperparameter Tuning
-
-Hyperparameters were tuned using `RandomizedSearchCV`. Final selected parameters:
-
-| Parameter | Value |
-|---|---:|
-| num_leaves | 45 |
-| learning_rate | 0.1211 |
-| n_estimators | 672 |
-| min_child_samples | 13 |
-| subsample | 0.9138 |
-| colsample_bytree | 0.7861 |
-| reg_lambda | 1.4174 |
-
-The target variable is also `log(Trended Price)`, with predictions exponentiated back into dollars.
 
 #### Explainability with SHAP
 
