@@ -386,8 +386,9 @@ def predict_price_nonlinear(**feats) -> dict:
 
 
 # ── Parcel data ───────────────────────────────────────────────────────────────
-# Not loaded at startup — uploaded at runtime via POST /upload-parcel-data
-PARCEL_DATA: pd.DataFrame | None = None
+# Keyed by user_id so uploads don't bleed across users
+PARCEL_DATA: dict[int, pd.DataFrame] = {}
+
 
 
 def _normalise_parcel_cols(df: pd.DataFrame) -> pd.DataFrame:
@@ -401,6 +402,20 @@ def _normalise_parcel_cols(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+# Pre-load the example CSV for the demo user
+_DEMO_PARCEL_DATA: pd.DataFrame | None = None
+_DEMO_CSV_PATH = Path(__file__).parent / "data" / "parcel_example.csv"
+if _DEMO_CSV_PATH.exists():
+    try:
+        _df_demo = pd.read_csv(_DEMO_CSV_PATH, dtype=str)
+        _DEMO_PARCEL_DATA = _normalise_parcel_cols(_df_demo)
+        print(f"[startup] demo parcel CSV loaded: {len(_DEMO_PARCEL_DATA)} rows")
+    except Exception as e:
+        print(f"[startup] demo parcel CSV failed to load: {e}")
+else:
+    print(f"[startup] demo parcel CSV not found at {_DEMO_CSV_PATH}")
+
+
 # ── Parcel CSV upload ─────────────────────────────────────────────────────────
 import io
 
@@ -409,43 +424,40 @@ async def upload_parcel_data(
     current_user: CurrentUser,
     file: UploadFile = File(...),
 ):
-    global PARCEL_DATA
     contents = await file.read()
     df = pd.read_csv(io.BytesIO(contents), dtype=str)
-    PARCEL_DATA = _normalise_parcel_cols(df)
-    return JSONResponse({"status": "ok", "rows": len(PARCEL_DATA), "columns": list(PARCEL_DATA.columns)})
+    PARCEL_DATA[current_user.id] = _normalise_parcel_cols(df)
+    udf = PARCEL_DATA[current_user.id]
+    return JSONResponse({"status": "ok", "rows": len(udf), "columns": list(udf.columns)})
 
 
 # ── Parcel data status ───────────────────────────────────────────────────────
 @app.get("/parcel-status", include_in_schema=False)
 async def parcel_status(current_user: CurrentUser):
-    if PARCEL_DATA is None:
+    is_demo = current_user.username.lower() == "demo"
+    udf = PARCEL_DATA.get(current_user.id) or (_DEMO_PARCEL_DATA if is_demo else None)
+    if udf is None:
         return JSONResponse({"loaded": False})
-    return JSONResponse({
-        "loaded": True,
-        "rows": len(PARCEL_DATA),
-        "columns": len(PARCEL_DATA.columns),
-    })
+    return JSONResponse({"loaded": True, "rows": len(udf), "columns": len(udf.columns)})
 
 
 # ── Parcel lookup ─────────────────────────────────────────────────────────────
 @app.get("/parcel/{parcel_id}", include_in_schema=False)
 async def lookup_parcel(parcel_id: str, current_user: CurrentUser):
-    if PARCEL_DATA is None:
+    is_demo = current_user.username.lower() == "demo"
+    udf = PARCEL_DATA.get(current_user.id) or (_DEMO_PARCEL_DATA if is_demo else None)
+    if udf is None:
         raise HTTPException(status_code=503, detail="Parcel data not loaded — upload a CSV first")
-    # ParcelNumber is a plain integer in the CSV
     pid = parcel_id.strip()
-    # Try numeric match first, fall back to string match
     col = None
     for candidate in ["parcelnumber", "parcel_number", "parcelid", "parcel_id"]:
-        if candidate in PARCEL_DATA.columns:
+        if candidate in udf.columns:
             col = candidate
             break
     if col is None:
         raise HTTPException(status_code=404, detail="Parcel column not found")
 
-    # Normalise both sides to string for comparison
-    match = PARCEL_DATA[PARCEL_DATA[col].astype(str).str.strip() == pid]
+    match = udf[udf[col].astype(str).str.strip() == pid]
     if match.empty:
         raise HTTPException(status_code=404, detail="Parcel not found")
 
@@ -462,25 +474,31 @@ async def lookup_parcel(parcel_id: str, current_user: CurrentUser):
 # ── Pages ─────────────────────────────────────────────────────────────────────
 @app.get("/main", include_in_schema=False)
 async def main_page(request: Request, current_user: CurrentUser):
-    return templates.TemplateResponse(request, "main.html", {})
+    global PARCEL_DATA
+    is_demo = current_user.username.lower() == "demo"
+    return templates.TemplateResponse(request, "main.html", {"is_demo": is_demo})
 
 
 @app.get("/main/nonlinear", include_in_schema=False)
 async def nonlinear_page(request: Request, current_user: CurrentUser):
-    return templates.TemplateResponse(request, "main_nonlinear.html", {})
+    global PARCEL_DATA
+    is_demo = current_user.username.lower() == "demo"
+    return templates.TemplateResponse(request, "main_nonlinear.html", {"is_demo": is_demo})
 
 
 # ── Similar houses via KNN on parcel CSV ─────────────────────────────────────
-def _find_similar(parcel_id: str, n: int = 5) -> list:
+def _find_similar(parcel_id: str, df: pd.DataFrame | None = None, n: int = 5) -> list:
     """
     Return up to n similar properties from the uploaded parcel CSV,
     excluding the queried parcel itself. Uses KNN on numeric features.
     Returns list of dicts with display fields.
     """
-    if PARCEL_DATA is None or not parcel_id:
+    if not parcel_id:
         return []
-
-    df = PARCEL_DATA.copy()
+    # _find_similar receives the user's dataframe directly
+    if df is None:
+        return []
+    df = df.copy()
 
     # Find parcel column
     col = next((c for c in df.columns if c in
@@ -620,7 +638,10 @@ def predict_linear(
             "lin_diag":          LIN_DIAG,
             "baseline_dollars":  0,
             "parcel_id":         parcel_id.strip() or None,
-            "similar_houses":    _find_similar(parcel_id.strip()) if parcel_id.strip() else [],
+            "similar_houses":    _find_similar(parcel_id.strip(),
+                                    PARCEL_DATA.get(current_user.id) or
+                                    (_DEMO_PARCEL_DATA if current_user.username.lower() == "demo" else None)
+                                    ) if parcel_id.strip() else [],
         },
     )
 
@@ -694,7 +715,10 @@ def predict_nonlinear(
             "segment":           result["segment_used"],
             "n_features":        None,
             "parcel_id":         parcel_id.strip() or None,
-            "similar_houses":    _find_similar(parcel_id.strip()) if parcel_id.strip() else [],
+            "similar_houses":    _find_similar(parcel_id.strip(),
+                                    PARCEL_DATA.get(current_user.id) or
+                                    (_DEMO_PARCEL_DATA if current_user.username.lower() == "demo" else None)
+                                    ) if parcel_id.strip() else [],
         },
     )
 

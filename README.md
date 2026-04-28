@@ -4,8 +4,8 @@ A machine-learning-powered property valuation platform built for **Math 4810 —
 
 This application allows authorized users to input property characteristics (or perform a parcel lookup) and receive a professional market value estimate using **two independently trained valuation models**:
 
-- **Linear Model (Lasso → OLS)** for transparency and explainability
-- **Non-Linear Model (LightGBM)** for maximum predictive accuracy
+- **Linear Model (Lasso → OLS)** — optimized for transparency and explainability
+- **Non-Linear Model (LightGBM)** — optimized for maximum predictive accuracy
 
 Each valuation includes:
 
@@ -17,31 +17,26 @@ Each valuation includes:
 - Comparable property recommendations (via parcel lookup)
 - Full valuation history tracking
 
----
-
-## 🌐 Live Deployment
-
-**Production App:**  
-https://iron-county-home-valuation-model.onrender.com
+**Production App:** https://iron-county-home-valuation-model.onrender.com
 
 ---
 
-# 📚 Table of Contents
+## 📚 Table of Contents
 
-1. Project Overview  
-2. Why Two Models?  
-3. Full Model Breakdown  
-4. Input Fields  
-5. Parcel ID Lookup System  
-6. Understanding Results  
-7. Running Locally  
-8. Deploying to Render  
-9. Project Structure  
-10. Known Limitations  
+1. [Project Overview](#project-overview)
+2. [Why Two Models?](#why-two-models)
+3. [Full Model Breakdown](#full-model-breakdown)
+4. [Input Fields](#input-fields)
+5. [Parcel ID Lookup System](#parcel-id-lookup-system)
+6. [Understanding Results](#understanding-results)
+7. [Running Locally](#running-locally)
+8. [Deploying to Render](#deploying-to-render)
+9. [Project Structure](#project-structure)
+10. [Known Limitations](#known-limitations)
 
 ---
 
-# Project Overview
+## Project Overview
 
 The Home Valuation Engine is a secure, password-protected web application designed for residential and multi-family property valuation in **Iron County, Utah**.
 
@@ -55,185 +50,80 @@ Users can:
 6. Compare against similar sold properties
 7. Save and revisit historical valuations
 
-This is not a toy calculator.
-
-It is designed to support real appraisal workflows where accuracy, defensibility, and explanation all matter.
+This is not a toy calculator. It is designed to support real appraisal workflows where accuracy, defensibility, and explanation all matter.
 
 ---
 
-# 🎯 What Makes This Different?
+## 🎯 What Makes This Different?
 
-Most valuation tools optimize for speed.
-
-This system optimizes for:
-
-## Accuracy  
-## Explainability  
-## Real-World Validation
-
-That matters more.
+Most valuation tools optimize for speed. This system optimizes for **accuracy**, **explainability**, and **real-world validation** — and that matters more.
 
 ---
 
-# Why Two Models?
+## Why Two Models?
 
 Because one model is rarely enough.
 
-Highly accurate models are often difficult to explain.
-
-Highly explainable models are often less accurate.
-
-Appraisers need both.
-
-This system provides two separate approaches so users can choose based on the situation.
-
-Sometimes you need the best estimate.
-
-Sometimes you need to defend that estimate to another human.
-
-Those are not always the same problem.
+Highly accurate models are often difficult to explain. Highly explainable models are often less accurate. Appraisers need both. This system provides two separate approaches so users can choose based on the situation — sometimes you need the best estimate, and sometimes you need to defend that estimate to another human. Those are not always the same problem.
 
 ---
 
-# Full Model Breakdown
+## Full Model Breakdown
 
----
+### Linear Model — Lasso → OLS Regression
 
-# Linear Model  
-## Lasso → OLS Regression
+**Performance**
+- Test R²: ~0.88
+- Dollar MAE: ~$40,000
 
-### Performance
+#### Step 1 — Feature Selection with Lasso
 
-- **Test R²:** ~0.88
-- **Dollar MAE:** ~$40,000
+Lasso regression performs automatic feature selection by shrinking weak coefficients to zero. This removes noise from a large engineered feature space that includes polynomial terms (`GLA²`, `Quality²`), interaction terms (`Residential × GLA`), and segment-specific valuation effects. Rather than manually choosing variables, Lasso forces the model to justify every feature it keeps.
 
----
+#### Step 2 — Final OLS Regression
 
-## Step 1 — Feature Selection with Lasso
+The surviving variables are passed into **Ordinary Least Squares (OLS)**, which produces unbiased coefficients, standard errors, t-statistics, and p-values. This makes the model fully transparent and highly defensible — you can explain exactly why the price moved, which matters when someone challenges the number.
 
-Lasso regression performs automatic feature selection by shrinking weak coefficients to zero.
-
-This helps remove noise from a large engineered feature space containing:
-
-- polynomial terms (`GLA²`, `Quality²`)
-- interaction terms (`Residential × GLA`)
-- segment-specific valuation effects
-
-Instead of manually choosing variables, Lasso forces the model to justify every feature.
-
-That is how regression should work.
-
----
-
-## Step 2 — Final OLS Regression
-
-The surviving variables are passed into:
-
-# Ordinary Least Squares (OLS)
-
-This produces:
-
-- unbiased coefficients
-- standard errors
-- t-statistics
-- p-values
-
-This makes the model fully transparent and highly defensible.
-
-You can explain exactly why the price moved.
-
-That matters when someone challenges the number.
-
----
-
-## Feature Transformations
+#### Feature Transformations
 
 Several heavy-tailed predictors are transformed for stability:
 
-### arcsinh transformation
+| Transformation | Applied To |
+|---|---|
+| arcsinh | Acreage, Garage Area, Basement Sqft, Total Assessed Value |
+| log | Gross Living Area |
 
-Used for:
+The target variable is `log(Trended Price)`, with predictions converted back to dollars via exponentiation. This produces a log-linear system where coefficients represent proportional price effects.
 
-- Acreage
-- Garage Area
-- Basement Sqft
-- Total Assessed Value
-
-### Log transformation
-
-Used for:
-
-- Gross Living Area
-
-### Target Variable
-
-The model predicts:
-
-# log(Trended Price)
-
-and then converts predictions back to dollars using exponentiation.
-
-This creates a log-linear valuation system where coefficients represent proportional price effects.
-
----
-
-## Strengths
-
-- Fully explainable
+#### Strengths
+- Fully explainable — coefficients have direct interpretable meaning
 - Stable and conservative
-- Easy to defend to clients
-- Supports statistical interpretation
+- Easy to defend to clients and stakeholders
+- Supports formal statistical interpretation
 - Strong for standard residential properties
 
----
-
-## Weaknesses
-
+#### Weaknesses
 - Limited ability to model non-linear relationships
-- Can miss complex interactions
+- Can miss complex feature interactions
 - Less accurate on unusual or extreme properties
 
 ---
 
-# Non-Linear Model  
-## LightGBM
+### Non-Linear Model — LightGBM
 
-### Performance
+**Performance**
+- Test R²: ~0.95
+- Dollar MAE: ~$20,000
 
-- **Test R²:** ~0.95
-- **Dollar MAE:** ~$20,000
+This is the highest-performing model in the system — by a significant margin.
 
-This is the highest-performing model in the system.
+#### Why It Performs Better
 
-By a lot.
+LightGBM uses gradient-boosted decision trees, which allows it to capture non-linear relationships, model feature interactions automatically, perform better on high-value properties, leverage Total Assessed Value more effectively, and avoid assumptions about linearity. Trees optimize for predictive performance without requiring textbook statistical assumptions.
 
----
+#### Hyperparameter Tuning
 
-## Why It Performs Better
-
-LightGBM uses gradient-boosted decision trees.
-
-That allows it to:
-
-- capture non-linear relationships
-- model feature interactions automatically
-- perform better on high-value properties
-- leverage Total Assessed Value more effectively
-- avoid assumptions about linearity
-
-Trees do not care about textbook assumptions.
-
-They care about predictive performance.
-
----
-
-## Hyperparameter Tuning
-
-Hyperparameters were tuned using:
-
-# RandomizedSearchCV
-
-Final selected parameters:
+Hyperparameters were tuned using `RandomizedSearchCV`. Final selected parameters:
 
 | Parameter | Value |
 |---|---:|
@@ -245,60 +135,29 @@ Final selected parameters:
 | colsample_bytree | 0.7861 |
 | reg_lambda | 1.4174 |
 
-The target variable is also:
+The target variable is also `log(Trended Price)`, with predictions exponentiated back into dollars.
 
-# log(Trended Price)
+#### Explainability with SHAP
 
-with predictions exponentiated back into dollars.
+Tree models are powerful — but also opaque. To address this, the system uses **SHAP (SHapley Additive exPlanations)**, which provides mathematically exact feature attribution by showing how each feature moves the prediction from the baseline average to the final estimate.
 
----
+The results page includes a contribution table, a waterfall chart, and a full baseline-to-prediction explanation path. This is rigorous interpretability, not a cosmetic approximation.
 
-# Explainability with SHAP
-
-Tree models are powerful.
-
-They are also black boxes.
-
-That is a problem.
-
-To fix that, this system uses:
-
-# SHAP  
-## SHapley Additive exPlanations
-
-SHAP provides mathematically exact feature attribution by showing how each feature moves the prediction from the baseline average to the final estimate.
-
-The results page includes:
-
-- contribution table
-- waterfall chart
-- baseline-to-prediction explanation path
-
-This is not fake interpretability.
-
-It is rigorous.
-
----
-
-## Strengths
-
-- Highest predictive accuracy
-- Handles complex interactions
+#### Strengths
+- Highest predictive accuracy in the system
+- Handles complex interactions and non-linearities
 - Better for expensive and unusual properties
 - Strong use of assessor value
-- Exact contribution decomposition with SHAP
+- Exact contribution decomposition via SHAP
 
----
-
-## Weaknesses
-
+#### Weaknesses
 - Less intuitive than regression coefficients
 - Harder to explain to non-technical users
 - Can be overconfident outside training boundaries
 
 ---
 
-# Which Model Should You Use?
+## Which Model Should You Use?
 
 | Situation | Recommended Model |
 |---|---|
@@ -307,25 +166,13 @@ It is rigorous.
 | Property is unusual or extreme | Linear |
 | Property is a typical residential home | Either |
 | You need p-values or coefficient confidence | Linear |
-| Property is high-value | Non-Linear |
+| Property is high-value (>$700k) | Linear |
 
-## Best Practice
-
-Run both.
-
-If both models agree closely, confidence increases.
-
-If they disagree heavily, pay attention.
-
-That usually means the property is unusual, risky, or sitting outside the comfortable boundaries of the training data.
-
-That is where professional judgment matters.
-
-Not blind trust in a model.
+**Best practice: run both.** If both models agree closely, confidence increases. If they disagree significantly, pay attention — that usually means the property is unusual, risky, or sitting outside the comfortable boundaries of the training data. That is where professional judgment matters, not blind trust in a model.
 
 ---
 
-# Input Fields
+## Input Fields
 
 Both models use the same property input fields.
 
@@ -341,316 +188,101 @@ Both models use the same property input fields.
 | Basement Sqft | Total basement area | No |
 | Garage Area | Garage area (sq ft) | No |
 | Garage Capacity | Number of cars | No |
-| Property Type | Example: Single Family Res | No |
+| Property Type | E.g., Single Family Res | No |
 | Total Assessed Value | Assessor valuation | Yes |
 
----
-
-# Important Note
-
-## Total Assessed Value
-
-This is often the single strongest predictor for high-value properties.
-
-It includes:
-
-- land value
-- improvements
-- assessor prior valuation
-
-Ignoring it is usually a mistake.
-
-Parcel lookup fills this automatically.
-
-Use it.
+> **Note on Total Assessed Value:** This is often the single strongest predictor, especially for high-value properties. It incorporates land value, improvements, and the assessor's prior valuation. Parcel lookup fills this automatically — use it.
 
 ---
 
-# Parcel ID Lookup System
+## Parcel ID Lookup System
 
-The system includes a full Parcel ID autofill workflow.
+The system includes a full Parcel ID autofill workflow. Users can upload a parcel CSV, search by parcel number, and automatically populate all input fields instantly — including property segment, living area, acreage, quality score, garage data, Total Assessed Value, and comparable properties. This saves time and reduces manual entry errors. Bad inputs create bad outputs.
 
-Users can:
+### Parcel CSV File
 
-1. Upload a parcel CSV
-2. Search by parcel number
-3. Automatically populate all fields instantly
+An example CSV with 10 sample properties is included in the repository. The original parcel data file is **not included** — it contains sensitive assessor information and must be uploaded manually each session via the **UPLOAD CSV** button in the application banner.
 
-This includes:
+> ⚠️ **Uploaded files are stored in memory only.** They are not written to disk or stored in the database, and are lost on server restart. You must re-upload after each deployment restart. This is intentional.
 
-- property segment
-- living area
-- acreage
-- quality score
-- garage data
-- Total Assessed Value
-- comparable properties
-
-This saves time and reduces bad manual input.
-
-Bad inputs create bad outputs.
-
-That should not need explanation.
-
----
-
-# Parcel CSV File
-
-A example file with 10 random houses features and parcel id is included in the github.
-
-The original parcel data file is **not included** in this repository.
-
-It contains sensitive assessor information and must be uploaded manually each session using:
-
-# UPLOAD CSV
-
-from the application banner.
-
-## Important
-
-The uploaded file is stored:
-
-# In Memory Only
-
-It is:
-
-- not written to disk
-- not stored in the database
-- lost after server restart
-
-You must re-upload it after deployment restarts.
-
-That is intentional.
-
----
-
-# Required CSV Columns
-
-The CSV should contain:
+### Required CSV Columns
 
 | Column | Purpose |
 |---|---|
-| ParcelNumber | Parcel lookup identifier |
-| segment | Residential / Multi-Family |
-| TotGLA | Gross living area |
-| EffYearBuilt_Weighted | Effective year built |
+| ParcelID | Unique parcel identifier |
+| Segment | Residential or Multi-Family |
+| GLA | Gross Living Area (sq ft) |
+| EffYrBlt | Effective Year Built |
 | Acreage | Lot size |
-| FullBaths_Total | Full bathrooms |
-| HalfBaths_Total | Half bathrooms |
-| Tot Bsmt | Basement square footage |
-| GarageArea | Garage size |
-| GarageCapacity | Garage capacity |
-| Quality_Weighted | Quality score |
-| Total Value | Total assessed value |
-| Sold Price | Actual sold price |
-
-Column names are normalized automatically.
-
-Examples:
-
-- `Total Value`
-- `total_value`
-
-Both work.
-
-Dollar-formatted values like:
-
-`$320,000.00`
-
-are also parsed automatically.
-
-Missing fields do not break lookup.
-
-They simply remain blank for manual entry.
+| QualScore | Quality score |
+| FullBaths | Full bathrooms |
+| HalfBaths | Half bathrooms |
+| BsmtSqft | Basement square footage |
+| GarageArea | Garage area (sq ft) |
+| GarageCap | Garage capacity |
+| PropType | Property type description |
+| TotalValue | Total Assessed Value |
+| NbhdCode2 | Neighborhood code |
 
 ---
 
-# Comparable Property Engine
+## Comparable Property Engine
 
-When parcel lookup is used, the system automatically identifies:
+When parcel lookup is used, the system automatically identifies the **5 most similar properties** using **K-Nearest Neighbors (KNN)**. Similarity is calculated using z-score normalized features: GLA, acreage, quality, effective year built, bathrooms, garage size, and total value.
 
-# 5 Most Similar Properties
-
-using:
-
-# K-Nearest Neighbors (KNN)
-
-Similarity is calculated using z-score normalized features such as:
-
-- GLA
-- acreage
-- quality
-- effective year built
-- bathrooms
-- garage size
-- total value
-
-The table displays:
-
-- parcel ID
-- GLA
-- year built
-- acreage
-- quality
-- actual sold price
-
-This gives users a real-world market sanity check alongside model predictions.
-
-Because if your model says one thing and the market says another, the market wins.
+The comparison table displays parcel ID, GLA, year built, acreage, quality, and actual sold price — giving users a real-world market sanity check alongside model predictions. If your model says one thing and the market says another, the market wins.
 
 ---
 
-# Understanding Results
+## Understanding Results
 
-Every valuation includes more than a number.
+### Predicted Price
 
----
+The main result is the estimated **current market value** based on a **trended price** — not the raw historical sold price. Trended price adjusts historical sales for market appreciation, reflecting what the property would likely sell for under current market conditions.
 
-# Predicted Price
+### 95% Prediction Interval
 
-The large result shown at the top is the estimated:
+Example: `$285,000 – $410,000`
 
-# Current Market Value
+This is a **prediction interval**, not a confidence interval. It reflects where an individual sale price is likely to fall. Intervals are computed from held-out test residuals grouped by neighborhood (`NbhdCode2`). Neighborhoods with less data produce wider intervals.
 
-This is based on:
+### Feature Contribution Table
 
-# Trended Price
+Both models include a contribution table showing how each input feature affected the final estimate.
 
-which adjusts historical sales for market appreciation.
+**Linear Model:** Contributions show how much each feature moves the price relative to the neighborhood median baseline. Positive values increase price; negative values reduce it. Related terms are grouped into clean business concepts (GLA, Quality, Bathrooms).
 
-It is not simply the historical sold price.
+**Non-Linear Model:** Contributions are SHAP values converted to dollar terms. They are mathematically exact and sum directly to the final prediction, reflecting the true model behavior.
 
-It reflects what the property would likely sell for under current market conditions.
+### SHAP Waterfall Chart *(Non-Linear model only)*
 
----
+The waterfall chart builds value step-by-step from the baseline average to the final prediction. It displays the baseline price, each positive and negative contributor, and the final predicted price with a prediction interval overlay.
 
-# 95% Prediction Interval
-
-Example:
-
-```text
-$285,000 – $410,000
-```
-
-This reflects where the actual sale price is likely to fall.
-
-This is a:
-
-# Prediction Interval
-
-not a:
-
-# Confidence Interval
-
-
-
----
-
-## Why It Matters
-
-Prediction intervals are computed using:
-
-- held-out test residuals
-- grouped by neighborhood (`NbhdCode2`)
-
-Neighborhoods with less data produce wider intervals.
-
----
-
-# Feature Contribution Table
-
-Both models include a contribution table showing how each feature affected the estimate.
-
----
-
-## Linear Model
-
-Contributions show:
-
-- how much each feature moves price
-- relative to the neighborhood median baseline
-
-Positive values increase price.
-
-Negative values reduce price.
-
-Related terms are grouped into clean business concepts such as:
-
-- GLA
-- Quality
-- Bathrooms
-
----
-
-## Non-Linear Model
-
-Contributions are:
-
-# SHAP Values
-
-converted to dollar terms.
-
-They:
-
-- are mathematically exact
-- sum directly to the final prediction
-- show the true model behavior
-
-The Value column displays the raw input value used by the model.
-
----
-
-# SHAP Waterfall Chart
-
-Available for the Non-Linear model.
-
-The chart builds value from:
-
-# Baseline → Final Prediction
-
-It shows:
-
-- baseline average price
-- positive contributors
-- negative contributors
-- final predicted price
-- prediction interval overlay
-
----
-
-# Diagnostic Plots
-
-Available for the Linear model.
+### Diagnostic Plots *(Linear model only)*
 
 Four diagnostic plots are shown from held-out test residuals.
 
-| Plot | What You Want |
+| Plot | What You Want to See |
 |---|---|
 | Residuals vs Fitted | Random scatter around zero |
-| Residuals by Segment | Similar spread |
-| Feature Influence | Waterfall Plot |
-| Actual vs Predicted | Close to 45° line |
+| Residuals by Segment | Similar spread across segments |
+| Feature Influence | Waterfall chart |
+| Actual vs Predicted | Points close to the 45° line |
 
-These plots answer one question:
-
-Can we trust the regression assumptions?
+These plots answer one question: can we trust the regression assumptions?
 
 ---
 
-# Running Locally
+## Running Locally
 
----
-
-# Prerequisites
+### Prerequisites
 
 - Python 3.10+
 - Git
-- `linear_model.pkl` - Included in the Github
-- `nonlinear_model.pkl` - Included in the Github
+- `linear_model.pkl` — included in the repository
+- `nonlinear_model.pkl` — included in the repository
 
----
-
-# Installation
+### Installation
 
 ```bash
 git clone https://github.com/your-username/your-repo-name.git
@@ -667,68 +299,52 @@ venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
----
+### Environment Variables
 
-# Environment Variables
+Create a `.env` file in the project root.
 
-Create a `.env` file:
-
-Sqlite:
+**SQLite (local development):**
 ```env
 DATABASE_URL=sqlite:///./your-db-name.db
 SESSION_SECRET=your-secret-key-here
 ```
-Other:
 
+**External database (production):**
 ```env
 DATABASE_URL=your-database-external-url
 SESSION_SECRET=your-secret-key-here
 ```
----
 
-# Adding Users
+### Adding Users
 
-There is intentionally:
-
-# No Public Registration
-
-Users are created manually using:
+There is no public registration. Users are created manually:
 
 ```bash
 python seed_user.py <username> <email> <password>
 ```
 
 Example:
-
 ```bash
 python seed_user.py admin admin@example.com mypassword
 ```
----
 
-# Starting the App
-
-Production-style run:
+### Starting the App
 
 ```bash
+# Production-style
 fastapi run main.py
-```
 
-Development with auto reload:
-
-```bash
+# Development with auto-reload
 fastapi dev main.py
 ```
 
-Then open:
+Then open http://localhost:8000 and log in.
 
-http://localhost:8000
+If the app fails to start, check your `.env` file to ensure the database URL is configured correctly.
 
-and log in.
-
-If it does not start, check your `.env` to ensure your databse is being called properly.
 ---
 
-# Project Structure
+## Project Structure
 
 ```text
 .
@@ -768,90 +384,40 @@ If it does not start, check your `.env` to ensure your databse is being called p
     └── parcel_example.csv
 ```
 
-Clean structure matters.
+---
 
-Messy projects create messy developers.
+## Known Limitations
+
+**Residential and Multi-Family only.** Land sales were excluded — vacant land valuation behaves differently and both models perform poorly on it. It's a different asset class and a different problem.
+
+**Iron County, Utah only.** The models were trained specifically on Iron County data. Applying them elsewhere will produce unreliable results.
+
+**No live market feed.** Predictions rely on trended historical sales and do not consume live MLS pricing.
+
+**Parcel CSV is session-based.** Uploaded parcel files are stored in memory only. A server restart clears them, requiring a manual re-upload.
+
+**Comparable properties require parcel lookup.** KNN comparables are only triggered when parcel lookup is used. Manual entry alone does not activate the comparable property engine — this is by design.
+
+**No public registration.** Accounts must be created manually via `seed_user.py`. The system is designed for controlled professional use, not open public access.
+
+### Non-Linear Model — High-Value Property Limitation
+
+The LightGBM model tends to **undervalue properties above approximately $700,000**. This is expected behavior driven by the structure of the training data and the nature of tree-based models.
+
+**Root causes:**
+
+1. **Skewed training distribution.** The dataset is concentrated around mid-range values (~$400k). High-value properties are relatively rare, so the model is optimized for the majority of cases and exhibits downward bias on expensive homes.
+
+2. **No extrapolation.** Gradient-boosted trees cannot extrapolate beyond observed training ranges. Predictions are formed from averages within decision tree leaves, so the model can't confidently predict values well above those in training.
+
+3. **Averaging within leaves.** High-value homes are often grouped with moderately high homes in the same decision regions, leading to systematic underestimation through averaging effects.
+
+4. **Regularization.** The model's regularization (learning rate and L2 penalty) reduces overfitting but also dampens extreme predictions, contributing to conservative estimates at the upper end of the market.
+
+**For properties above ~$700k:** expect the Non-Linear model to skew low, expect more disagreement between models, and treat the Linear model as the more reliable reference. Run both, compare carefully, and use comparable properties as a validation check.
 
 ---
 
-# Known Limitations
+## Final Note
 
----
-
-# Residential + Multi-Family Only
-
-Land sales were excluded.
-
-Vacant land valuation behaves differently and both models perform poorly there.
-
-Different asset class.
-
-Different problem.
-
----
-
-# Iron County Only
-
-The model is trained specifically for:
-
-# Iron County, Utah
-
-Using it elsewhere is statistically irresponsible.
-
-Do not do it.
-
----
-
-# No Live Market Feed
-
-Predictions rely on trended historical sales.
-
-This system does not consume live MLS pricing.
-
-It is not magic.
-
----
-
-# Parcel CSV Is Session-Based
-
-Uploaded parcel files are stored only in memory.
-
-Server restart means:
-
-gone.
-
-Re-upload required.
-
----
-
-# Comparable Properties Require Lookup
-
-Comparable property search only works when parcel lookup is used.
-
-Manual entry alone does not trigger KNN comparables.
-
-That is by design.
-
----
-
-# No Public Registration
-
-Accounts must be created manually.
-
-This is intentional.
-
-The system is designed for controlled professional use, not open public access.
-
-Good systems are often restrictive on purpose.
-
----
-
-# Final Note
-
-If both models agree:
-
-good.
-
-If both models disagree:
-
-pay attention.
+If both models agree — good. If they disagree — pay attention.

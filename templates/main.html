@@ -28,10 +28,17 @@
   </div>
 
   <div class="upload-banner">
+    {% if is_demo %}
+    <span class="upload-banner-label ok" id="upload-label">✓ DEMO DATA LOADED</span>
+    <label class="upload-btn-label" for="parcel-file-input">UPLOAD CSV ↑</label>
+    <input type="file" id="parcel-file-input" accept=".csv">
+    <span id="upload-status">Demo parcel data pre-loaded — try parcel ID: LM5Q88AZ</span>
+    {% else %}
     <span class="upload-banner-label warn" id="upload-label">⚠ PARCEL DATA NOT LOADED</span>
     <label class="upload-btn-label" for="parcel-file-input">UPLOAD CSV ↑</label>
     <input type="file" id="parcel-file-input" accept=".csv">
     <span id="upload-status">Upload final_adjusted.csv to enable parcel lookup</span>
+    {% endif %}
   </div>
 
   <main>
@@ -45,7 +52,9 @@
         </svg>
         PARCEL ID
       </div>
-      <input id="parcel-input" type="text" autocomplete="off" placeholder="enter parcel ID">
+      <input id="parcel-input" type="text" autocomplete="off"
+             placeholder="{{ 'LM5Q88AZ' if is_demo else 'enter parcel ID' }}"
+             value="{{ 'LM5Q88AZ' if is_demo else '' }}">
       <span id="parcel-status">AWAITING ID</span>
       <button class="lookup-btn" onclick="lookupParcel()">LOOKUP →</button>
     </div>
@@ -99,8 +108,7 @@
         <div class="field">
           <label>Garage Capacity <span class="hint">cars</span></label>
           <input type="number" step="1" name="garage_capacity" id="f_garage_capacity" placeholder="e.g. 2" value="0" />
-        </div>
-        <div class="field">
+          <div class="field full-width">
           <label>Total Assessed Value <span class="hint">assessor $</span></label>
           <input type="number" step="1" name="total_value" id="f_total_value" placeholder="e.g. 320000" required />
         </div>
