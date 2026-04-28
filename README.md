@@ -269,10 +269,10 @@ These plots answer one question: can we trust the regression assumptions?
 ### Installation
 
 ```bash
-git clone https://github.com/your-username/your-repo-name.git
-cd your-repo-name
+git clone https://github.com/LuccaCoelho/MATH-4810_Website.git
+cd MATH-4810_Website
 
-python -m venv venv
+python3 -m venv venv
 
 # macOS / Linux
 source venv/bin/activate
@@ -300,6 +300,8 @@ SESSION_SECRET=your-secret-key-here
 ```
 
 ### Adding Users
+
+For this to work, you will need a .db file and the path in the environments file to run locally.
 
 There is no public registration. Users are created manually:
 
