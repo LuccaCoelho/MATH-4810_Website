@@ -240,10 +240,15 @@ main {
 
 /* ── Submit row ── */
 .submit-row {
-  margin-top: 32px; display: flex;
-  align-items: center; justify-content: flex-end; gap: 16px;
+  margin-top: 32px; 
+  margin-left: 50%;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 16px;
 }
 .submit-btn {
+  margin-left: auto;
   background: transparent; border: 1px solid var(--accent);
   color: var(--accent); font-family: var(--mono); font-size: 12px;
   letter-spacing: 0.2em; text-transform: uppercase;

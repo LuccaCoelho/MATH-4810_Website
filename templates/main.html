@@ -106,27 +106,6 @@
           <label>Garage Capacity <span class="hint">cars</span></label>
           <input type="number" step="1" name="garage_capacity" id="f_garage_capacity" placeholder="e.g. 2" value="0" />
         </div>
-
-        <div class="field">
-          <label>Property Type <span class="hint">optional</span></label>
-          <select name="prop_type" id="f_prop_type" onchange="checkPropType()">
-            <option value="Single Family Res">Single Family Res</option>
-            <option value="Res Condo">Res Condo</option>
-            <option value="Res PUD">Res PUD</option>
-            <option value="Twin Home">Twin Home</option>
-            <option value="Res Plex (2 - 4)">Res Plex (2 - 4)</option>
-            <option value="Manufactured Home">Manufactured Home</option>
-            <option value="Vacant">Vacant Land</option>
-            <option value="other">Other (non-residential)</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Neighborhood Code <span class="hint">NbhdCode2 from CSV</span></label>
-          <input type="text" name="nbhd_code" id="f_nbhd_code" placeholder="e.g. 0100" autocomplete="off" />
-        </div>
-
-      </div>
-
       <div class="proptype-warning" id="proptype-warning">
         ⚠ <strong>MODEL LIMITATION</strong> — This valuation engine is trained on
         residential transactions only. Non-residential property types (commercial,
@@ -135,9 +114,10 @@
         The estimate below will likely be unreliable. Proceed with caution.
       </div>
 
+      <input type="hidden" name="parcel_id" id="hidden-parcel-id" value="">
       <div class="submit-row">
         <span class="submit-note" id="feature-count">12 FEATURES LOADED</span>
-        <button type="submit" class="submit-btn">RUN LINEAR VALUATION →</button>
+        <button type="submit" class="submit-btn">RUN LINEAR VALUATION</button>
       </div>
     </form>
   </main>
@@ -154,13 +134,16 @@
       bsmt_pct_finish:  'bsmtfinishpct_weighted',
       garage_area:      'garagearea',
       garage_capacity:  'garagecapacity',
-      quality_weighted: 'quality_weighted',
-      nbhd_code:        'nbhdcode2',
-    };
+      quality_weighted: 'quality_weighted',    };
     window.TOTAL_FIELDS        = Object.keys(window.FIELD_MAP).length;
     window.PARCEL_INPUT_PATTERN = /[^A-Za-z0-9-]/g;
   </script>
   <script src="/static/js/main.js"></script>
 
+  <script>
+    document.getElementById('parcel-input').addEventListener('input', function () {
+      document.getElementById('hidden-parcel-id').value = this.value.trim();
+    });
+  </script>
 </body>
 </html>

@@ -39,6 +39,7 @@
           <th>Time</th>
           <th>Model</th>
           <th>Features</th>
+          <th>Parcel</th>
           <th>Result</th>
         </tr>
       </thead>
@@ -50,6 +51,7 @@
           <td class="td-date">{{ v.created_at.strftime('%H:%M:%S') }}</td>
           <td class="td-model">{{ v.model_type | upper }}</td>
           <td>{{ v.features | length }} features</td>
+          <td class="td-date">{{ v.parcel_id if v.parcel_id else "—" }}</td>
           <td class="td-result">${{ "{:,.0f}".format(v.valuation_result) }}</td>
         </tr>
         {% endfor %}

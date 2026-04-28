@@ -51,7 +51,7 @@ _lin_model           = _lin["model"]
 _sel_names           = _lin["sel_names"]
 _Xc_tr_cols          = _lin["Xc_tr_cols"]
 _X_tr_v4_cols        = _lin["X_tr_v4_cols"]
-_lin_seg_defaults    = _lin["nbhd_defaults"]
+_lin_seg_defaults    = _lin["seg_defaults"]
 _lin_global_defaults = _lin["global_defaults"]
 _lin_pi_q            = _lin["pi_q"]
 _lin_pi_q_global     = _lin["pi_q_global"]
@@ -65,7 +65,7 @@ _key_numeric         = _lin["key_numeric"]
 _nl_model        = _nl["model"]
 _orig_of         = _nl["orig_of"]
 _X_train_cols    = _nl["X_train_cols"]
-_nl_seg_defaults = _nl["nbhd_defaults"]
+_nl_seg_defaults = _nl["seg_defaults"]
 _nl_pi_q         = _nl["pi_q"]
 _nl_pi_q_global  = _nl["pi_q_global"]
 _base_val        = _nl["base_val"]
@@ -190,8 +190,9 @@ def predict_price_linear(**feats) -> dict:
     nbhd    = feats.pop("NbhdCode2", None)
     segment = feats.pop("segment", "Residential")
 
+    # seg_defaults is keyed by segment string (matches QMD)
     row = pd.Series(
-        _lin_seg_defaults.get(nbhd, _lin_global_defaults)
+        _lin_seg_defaults.get(segment, _lin_global_defaults)
     ).fillna(0.0)
 
     for c in row.index:
@@ -221,7 +222,7 @@ def predict_price_linear(**feats) -> dict:
     )
 
     log_pred = float(_lin_model.predict(Xc_row).iloc[0])
-    q_lo, q_hi = _lin_pi_q.get(nbhd, _lin_pi_q_global)
+    q_lo, q_hi = _lin_pi_q.get(segment, _lin_pi_q_global)
 
     # ── Log-scale % contributions grouped by original feature ────────────────
     # In a log-linear model: log(price) = intercept + Σ βᵢ·xᵢ
@@ -306,7 +307,8 @@ def predict_price_nonlinear(**feats) -> dict:
 
     row = pd.Series(0.0, index=_X_train_cols)
 
-    for k, v in _nl_seg_defaults.get(nbhd, {}).items():
+    # seg_defaults is keyed by segment string (matches QMD)
+    for k, v in _nl_seg_defaults.get(segment, {}).items():
         cl = _clean(k)
         if cl in row.index:
             row[cl] = v
@@ -328,7 +330,8 @@ def predict_price_nonlinear(**feats) -> dict:
 
     X_row    = row.to_frame().T
     log_pred = float(_nl_model.predict(X_row)[0])
-    q_lo, q_hi = _nl_pi_q.get(nbhd, _nl_pi_q_global)
+    # PI quantiles keyed by segment (matches QMD)
+    q_lo, q_hi = _nl_pi_q.get(segment, _nl_pi_q_global)
 
     sv    = _explainer.shap_values(X_row)[0]
     order = np.argsort(-np.abs(sv))[:15]
@@ -456,8 +459,8 @@ def predict_linear(
     garage_capacity: int   = Form(0),
     quality_weighted: float = Form(...),
     prop_type: str         = Form("Single Family Res"),
-    nbhd_code: str         = Form(""),
     main_style: str        = Form(""),
+    parcel_id: str         = Form(""),
 ):
     feats: dict = {
         "segment":               segment,
@@ -473,8 +476,6 @@ def predict_linear(
     }
     feats["Tot Bsmt"]               = basement_sqft
     feats["BsmtFinishPct_Weighted"] = bsmt_pct_finish
-    if nbhd_code:
-        feats["NbhdCode2"] = nbhd_code
     if main_style:
         feats["Main_StyleDesc"] = main_style
 
@@ -483,9 +484,16 @@ def predict_linear(
     db.add(Valuation(
         user_id=current_user.id,
         model_type="linear",
+        segment=result["segment_used"],
+        n_features=result["n_features"],
         features=[name for name, _ in result["top_contributions"]],
         coefs=[float(val) for _, val in result["top_contributions"]],
+        feat_vals=[],
         valuation_result=result["pred"],
+        pi_lo=result["pi_lo"],
+        pi_hi=result["pi_hi"],
+        baseline_dollars=0.0,
+        parcel_id=parcel_id.strip() or None,
     ))
     db.commit()
 
@@ -502,6 +510,7 @@ def predict_linear(
             "n_features":        result["n_features"],
             "lin_diag":          LIN_DIAG,
             "baseline_dollars":  0,
+            "parcel_id":         parcel_id.strip() or None,
         },
     )
 
@@ -524,8 +533,8 @@ def predict_nonlinear(
     garage_capacity: int   = Form(0),
     quality_weighted: float = Form(...),
     prop_type: str         = Form("Single Family Res"),
-    nbhd_code: str         = Form(""),
     main_style: str        = Form(""),
+    parcel_id: str         = Form(""),
 ):
     feats: dict = {
         "segment":               segment,
@@ -541,8 +550,6 @@ def predict_nonlinear(
     }
     feats["Tot Bsmt"]               = basement_sqft
     feats["BsmtFinishPct_Weighted"] = bsmt_pct_finish
-    if nbhd_code:
-        feats["NbhdCode2"] = nbhd_code
     if main_style:
         feats["Main_StyleDesc"] = main_style
 
@@ -551,9 +558,15 @@ def predict_nonlinear(
     db.add(Valuation(
         user_id=current_user.id,
         model_type="nonlinear",
+        segment=segment,
         features=[name for name, _, __ in result["top_contributions"]],
         coefs=[float(val) for _, val, __ in result["top_contributions"]],
+        feat_vals=[float(fv) for _, __, fv in result["top_contributions"]],
         valuation_result=result["pred"],
+        pi_lo=result["pi_lo"],
+        pi_hi=result["pi_hi"],
+        baseline_dollars=result["baseline_dollars"],
+        parcel_id=parcel_id.strip() or None,
     ))
     db.commit()
 
@@ -570,6 +583,7 @@ def predict_nonlinear(
             "model_type":        "Non-Linear (LightGBM)",
             "segment":           result["segment_used"],
             "n_features":        None,
+            "parcel_id":         parcel_id.strip() or None,
         },
     )
 
@@ -588,4 +602,76 @@ def show_history(
     return templates.TemplateResponse(
         request, "history.html",
         {"valuations": valuations},
+    )
+
+@app.get("/history/{valuation_id}", include_in_schema=False)
+def show_history_detail(
+    valuation_id: int,
+    request: Request,
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+):
+    v = db.execute(
+        select(Valuation).where(
+            Valuation.id == valuation_id,
+            Valuation.user_id == current_user.id,
+        )
+    ).scalar_one_or_none()
+
+    if v is None:
+        raise HTTPException(status_code=404, detail="Valuation not found")
+
+    is_linear = v.model_type == "linear"
+
+    features  = v.features  or []
+    coefs     = v.coefs     or []
+    feat_vals = v.feat_vals or []
+
+    # Reconstruct top_contributions in the same shape the result template expects:
+    # linear  → list of (name, dollar_float)
+    # nonlinear → list of (name, dollar_float, feat_val)
+    if is_linear or not feat_vals:
+        top_contributions = list(zip(features, coefs))
+    else:
+        top_contributions = list(zip(features, coefs, feat_vals))
+
+    pred = float(v.valuation_result)
+
+    # Prefer stored PI bounds; fall back to global quantile approximation
+    if v.pi_lo is not None and v.pi_hi is not None:
+        pi_lo = float(v.pi_lo)
+        pi_hi = float(v.pi_hi)
+    elif is_linear:
+        q_lo, q_hi = _lin_pi_q_global
+        pi_lo = float(np.exp(np.log(pred) + q_lo))
+        pi_hi = float(np.exp(np.log(pred) + q_hi))
+    else:
+        q_lo, q_hi = _nl_pi_q_global
+        pi_lo = float(np.exp(np.log(pred) + q_lo))
+        pi_hi = float(np.exp(np.log(pred) + q_hi))
+
+    if is_linear:
+        model_label = "Linear (Lasso → OLS)"
+        lin_diag    = LIN_DIAG
+        baseline    = 0
+    else:
+        model_label = "Non-Linear (LightGBM)"
+        lin_diag    = None
+        baseline    = float(v.baseline_dollars) if v.baseline_dollars is not None else float(np.exp(_base_val))
+
+    return templates.TemplateResponse(
+        request, "result.html",
+        {
+            "predicted_price":   pred,
+            "pi_lo":             pi_lo,
+            "pi_hi":             pi_hi,
+            "top_contributions": top_contributions,
+            "baseline_dollars":  baseline,
+            "is_pct":            False,
+            "lin_diag":          lin_diag,
+            "model_type":        model_label,
+            "segment":           v.segment or "—",
+            "n_features":        v.n_features,
+            "parcel_id":         v.parcel_id,
+        },
     )

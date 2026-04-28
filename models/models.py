@@ -46,6 +46,8 @@ class Valuation(Base):
     coefs: Mapped[list] = mapped_column(JSON, nullable=False)
     feat_vals: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, default=list)
 
+    parcel_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, default=None)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     user: Mapped["User"] = relationship("User", back_populates="valuations")

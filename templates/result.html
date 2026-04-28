@@ -30,7 +30,8 @@
       <div class="result-meta">
         {{ model_type | upper }}<br>
         SEGMENT: {{ segment | upper }}<br>
-        {% if n_features %}{{ n_features }} FEATURES SELECTED{% endif %}
+        {% if n_features %}{{ n_features }} FEATURES SELECTED<br>{% endif %}
+        {% if parcel_id %}PARCEL: {{ parcel_id }}{% endif %}
       </div>
     </div>
     <div class="pi-row">
