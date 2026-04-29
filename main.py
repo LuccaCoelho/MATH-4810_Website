@@ -228,23 +228,23 @@ def predict_pricelinearear(**feats) -> dict:
     # Map each model column back to something we can read
     def group_name(col: str) -> str:
         col_l = col.lower()
-        if "ln_gla" in col_l or col_l == "gla": return "GLA (living area)"
+        if "ln_gla" in col_l or col_l == "gla": return "GLA"
         if "asinh_acreage" in col_l or "acreage" in col_l: return "Acreage"
         if "effyear" in col_l: return "Effective Year Built"
-        if "quality" in col_l: return "Quality Score"
+        if "quality" in col_l: return "Quality_Weighted"
         if "asinh_land" in col_l or "land_value" in col_l: return "Land Value"
-        if "asinh_total" in col_l or "total_value" in col_l: return "Total Assessed Value"
-        if "asinh_tot_bsmt" in col_l or "tot_bsmt"  in col_l: return "Basement Sqft"
+        if "asinh_total" in col_l or "total_value" in col_l or "total value" in col_l: return "Previous Assessment"
+        if "asinh_tot_bsmt" in col_l or "tot_bsmt" in col_l: return "Tot Bsmt"
         if "bsmtfin" in col_l: return "Basement Finish %"
-        if "garage_area"   in col_l or "garagearea" in col_l:    return "Garage Area"
-        if "garagecap" in col_l: return "Garage Capacity"
-        if "fullbath" in col_l: return "Full Baths"
-        if "halfbath" in col_l: return "Half Baths"
-        if "nbhdcode" in col_l or "nbhd" in col_l: return "Neighborhood"
+        if "garage_area" in col_l or "garagearea" in col_l: return "GarageArea"
+        if "garagecap" in col_l: return "GarageCapacity"
+        if "fullbath" in col_l: return "FullBaths_Total"
+        if "halfbath" in col_l: return "HalfBaths_Total"
+        if "nbhdcode" in col_l or "nbhd" in col_l: return "NbhdCode2"
         if "segment_" in col_l: return "Segment"
-        if col_l.startswith("proptypedesc"): return "Property Type"
-        if col_l.startswith("specificprop"): return "Specific Prop Type"
-        if col_l.startswith("main_styledesc"): return "Style"
+        if col_l.startswith("proptypedesc"): return "PropTypeDescription"
+        if col_l.startswith("specificprop"): return "SpecificPropType"
+        if col_l.startswith("main_styledesc"): return "Main_StyleDesc"
         return col  # fallback: use raw name
 
     grouped: dict[str, float] = {}
@@ -320,10 +320,17 @@ def predict_price_nonlinear(**feats) -> dict:
     # Incremental waterfall dollar steps in log space.
     # Each contribution is the dollar delta from the running log-price total,
     # so that summing all steps from baseline_dollars exactly reconstructs PREDICTED.
+    # Display name overrides for nonlinear model (orig_of returns raw column names)
+    _NL_NAME_OVERRIDES = {
+        "total value": "Previous Assessment",
+        "total_value": "Previous Assessment",
+    }
+
     top_contributions = []
     running_log = base_val
     for i in order:
         feat_name = orig_of[X_train_cols[i]]
+        feat_name = _NL_NAME_OVERRIDES.get(feat_name.lower(), feat_name)
         shap_val = float(shape_vals[i])
         feat_val = float(row.iloc[i])
         dollar = float(np.exp(running_log + shap_val) - np.exp(running_log))
