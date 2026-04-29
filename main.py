@@ -188,12 +188,11 @@ def nonlinear_set_dummy(row: pd.Series, prefix: str, value) -> None:
 
 
 def predict_pricelinearear(**feats) -> dict:
-    nbhd = feats.pop("NbhdCode2", None)
     segment = feats.pop("segment", "Residential")
 
-    # nbhd_defaults is keyed by NbhdCode2
+    # defaults are now keyed by segment (matches updated QMD)
     row = pd.Series(
-        linear_nbhd_defaults.get(nbhd, linear_global_defaults)
+        linear_nbhd_defaults.get(segment, linear_global_defaults)
     ).fillna(0.0)
 
     for c in row.index:
@@ -202,13 +201,6 @@ def predict_pricelinearear(**feats) -> dict:
     seg_col = f"segment_{segment}"
     if seg_col in row.index:
         row[seg_col] = 1
-
-    # Zero out all NbhdCode2 dummies from the median row before setting the correct one
-    for c in row.index:
-        if c.startswith("NbhdCode2_"):
-            row[c] = 0
-    if nbhd is not None:
-        linear_set_dummy(row, "NbhdCode2", nbhd)
 
     for k, v in feats.items():
         if k in linear_categoricals:
@@ -227,7 +219,8 @@ def predict_pricelinearear(**feats) -> dict:
     )
 
     log_pred = float(linear_model.predict(Xc_row).iloc[0])
-    q_lo, q_hi = linear_pi_q.get(nbhd, linear_pi_q_global)
+    # PI quantiles are now keyed by segment (matches updated QMD)
+    q_lo, q_hi = linear_pi_q.get(segment, linear_pi_q_global)
 
     coefs   = linear_model.params
     Xc_vals = Xc_row.iloc[0]
@@ -289,13 +282,12 @@ def predict_pricelinearear(**feats) -> dict:
 
 
 def predict_price_nonlinear(**feats) -> dict:
-    nbhd = feats.pop("NbhdCode2", None)
     segment = feats.pop("segment", "Residential")
 
     row = pd.Series(0.0, index=X_train_cols)
 
-    # nbhd_defaults is keyed by NbhdCode2 (matches QMD)
-    for k, v in nonlinear_nbhd_defaults.get(nbhd, {}).items():
+    # defaults are now keyed by segment (matches updated QMD)
+    for k, v in nonlinear_nbhd_defaults.get(segment, {}).items():
         cl = clean(k)
         if cl in row.index:
             row[cl] = v
@@ -308,12 +300,7 @@ def predict_price_nonlinear(**feats) -> dict:
     if seg_col in row.index:
         row[seg_col] = 1
 
-    # Zero out all NbhdCode2 dummies from the median row before setting the correct one
-    for c in nonlinear_nbhd_dummy_cols:
-        row[c] = 0
-    if nbhd is not None:
-        nonlinear_set_dummy(row, "NbhdCode2", nbhd)
-
+    # NbhdCode2 is now a regular categorical dummy — handled below like any other
     for k, v in feats.items():
         if k in nonlinear_categoricals:
             nonlinear_set_dummy(row, k, v)
@@ -324,21 +311,23 @@ def predict_price_nonlinear(**feats) -> dict:
 
     X_row = row.to_frame().T
     log_pred = float(nonlinear_model.predict(X_row)[0])
-    # PI quantiles keyed by NbhdCode2 (matches QMD)
-    q_lo, q_hi = nonlinear_pi_q.get(nbhd, nonlinear_pi_q_global)
+    # PI quantiles are now keyed by segment (matches updated QMD)
+    q_lo, q_hi = nonlinear_pi_q.get(segment, nonlinear_pi_q_global)
 
     shape_vals = explainer.shap_values(X_row)[0]
     order = np.argsort(-np.abs(shape_vals))[:15]
 
-    # Exact SHAP dollar impact: exp(base + shap_i) - exp(base)
-    # This is exact because SHAP values on log-price are additive:
-    # log_pred = base_val + sum(shap_i), so each shap_i is a log-price delta.
+    # Incremental waterfall dollar steps in log space.
+    # Each contribution is the dollar delta from the running log-price total,
+    # so that summing all steps from baseline_dollars exactly reconstructs PREDICTED.
     top_contributions = []
+    running_log = base_val
     for i in order:
         feat_name = orig_of[X_train_cols[i]]
         shap_val = float(shape_vals[i])
         feat_val = float(row.iloc[i])
-        dollar = float(np.exp(base_val + shap_val) - np.exp(base_val))
+        dollar = float(np.exp(running_log + shap_val) - np.exp(running_log))
+        running_log += shap_val
         top_contributions.append((feat_name, dollar, feat_val))
 
     return dict(
@@ -558,9 +547,10 @@ def predictlinearear(
         "PropTypeDescription": prop_type,
     }
     feats["Tot Bsmt"] = basement_sqft
+    feats["Total Value"] = total_value
+    # NbhdCode2 is now a regular categorical dummy — pass it if present
     if nbhd_code2.strip():
         feats["NbhdCode2"] = nbhd_code2.strip()
-    feats["Total Value"] = total_value
 
     result = predict_pricelinearear(**feats)
 
@@ -591,7 +581,7 @@ def predictlinearear(
             "model_type": "Linear (Lasso → OLS)",
             "segment": result["segment_used"],
             "n_features": result["n_features"],
-            "linEAR_diag": LINEAR_DIAG,
+            "lin_diag": LINEAR_DIAG,
             "baseline_dollars": 0,
             "parcel_id": parcel_id.strip() or None,
             "similar_houses": find_similar(parcel_id.strip(),
@@ -636,9 +626,10 @@ def predict_nonlinear(
         "PropTypeDescription": prop_type,
     }
     feats["Tot Bsmt"] = basement_sqft
+    feats["Total Value"] = total_value
+    # NbhdCode2 is now a regular categorical dummy — pass it if present
     if nbhd_code2.strip():
         feats["NbhdCode2"] = nbhd_code2.strip()
-    feats["Total Value"] = total_value
 
     result = predict_price_nonlinear(**feats)
 
@@ -666,7 +657,7 @@ def predict_nonlinear(
             "top_contributions": result["top_contributions"],   # list of (name, dollar, feat_val)
             "baseline_dollars": result["baseline_dollars"],
             "is_pct": False,
-            "linEAR_diag": None,
+            "lin_diag": None,
             "model_type": "Non-Linear (LightGBM)",
             "segment": result["segment_used"],
             "n_features": None,
@@ -740,11 +731,11 @@ def show_history_detail(
 
     if islinearear:
         model_label = "Linear (Lasso → OLS)"
-        linEAR_diag = LINEAR_DIAG
+        lin_diag = LINEAR_DIAG
         baseline = 0
     else:
         model_label = "Non-Linear (LightGBM)"
-        linEAR_diag = None
+        lin_diag = None
         baseline = float(v.baseline_dollars) if v.baseline_dollars is not None else float(np.exp(base_val))
 
     return templates.TemplateResponse(
@@ -756,7 +747,7 @@ def show_history_detail(
             "top_contributions": top_contributions,
             "baseline_dollars": baseline,
             "is_pct": False,
-            "linEAR_diag": linEAR_diag,
+            "lin_diag": lin_diag,
             "model_type": model_label,
             "segment": v.segment or "—",
             "n_features": v.n_features,

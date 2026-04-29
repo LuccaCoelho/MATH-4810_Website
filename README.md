@@ -392,6 +392,8 @@ If the app fails to start, check your `.env` file to ensure the database URL is 
 
 **No public registration.** Accounts must be created manually via `seed_user.py`. The system is designed for controlled professional use, not open public access.
 
+**Acreage.** Acreage is a clear influential feature for both models, but since the models were not trained in a lot of very large lands, it do not value the acreage as it should. So a 20 acre land will increase around $35k to your home value according to the models.
+
 ### Non-Linear Model — High-Value Property Limitation
 
 The LightGBM model tends to **undervalue properties above approximately $700,000**. This is expected behavior driven by the structure of the training data and the nature of tree-based models.
