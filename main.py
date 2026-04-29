@@ -394,10 +394,12 @@ async def upload_parcel_data(
 
 
 # Parcel data status 
-app.get("/parcel-status", include_in_schema=False)
+@app.get("/parcel-status", include_in_schema=False)
 async def parcel_status(current_user: CurrentUser):
     is_demo = current_user.username.lower() == "demo"
-    udf = PARCEL_DATA.get(current_user.id) or (DEMO_PARCEL_DATA if is_demo else None)
+    udf = PARCEL_DATA.get(current_user.id)
+    if udf is None:
+        udf = DEMO_PARCEL_DATA if is_demo else None
     if udf is None:
         return JSONResponse({"loaded": False})
     return JSONResponse({"loaded": True, "rows": len(udf), "columns": len(udf.columns)})
@@ -407,7 +409,9 @@ async def parcel_status(current_user: CurrentUser):
 @app.get("/parcel/{parcel_id}", include_in_schema=False)
 async def lookup_parcel(parcel_id: str, current_user: CurrentUser):
     is_demo = current_user.username.lower() == "demo"
-    udf = PARCEL_DATA.get(current_user.id) or (DEMO_PARCEL_DATA if is_demo else None)
+    udf = PARCEL_DATA.get(current_user.id)
+    if udf is None:
+        udf = DEMO_PARCEL_DATA if is_demo else None
     if udf is None:
         raise HTTPException(status_code=503, detail="Parcel data not loaded — upload a CShape_Vals first")
     pid = parcel_id.strip()
@@ -591,9 +595,9 @@ def predictlinearear(
             "baseline_dollars": 0,
             "parcel_id": parcel_id.strip() or None,
             "similar_houses": find_similar(parcel_id.strip(),
-                                    PARCEL_DATA.get(current_user.id) or
-                                    (DEMO_PARCEL_DATA if current_user.username.lower() == "demo" else None)
+                                     (PARCEL_DATA.get(current_user.id) if PARCEL_DATA.get(current_user.id) is not None else (DEMO_PARCEL_DATA if current_user.username.lower() == "demo" else None))
                                     ) if parcel_id.strip() else [],
+
         },
     )
 
@@ -668,14 +672,14 @@ def predict_nonlinear(
             "n_features": None,
             "parcel_id": parcel_id.strip() or None,
             "similar_houses": find_similar(parcel_id.strip(),
-                                    PARCEL_DATA.get(current_user.id) or
-                                    (DEMO_PARCEL_DATA if current_user.username.lower() == "demo" else None)
+                                    PARCEL_DATA.get(current_user.id) if PARCEL_DATA.get(current_user.id) is not None else (DEMO_PARCEL_DATA if current_user.username.lower() == "demo" else None)
                                     ) if parcel_id.strip() else [],
+
         },
     )
 
 
-#  HISTORY 
+# HISTORY 
 @app.get("/history", include_in_schema=False)
 def show_history(
     request: Request,
