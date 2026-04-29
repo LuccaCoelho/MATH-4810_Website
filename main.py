@@ -353,18 +353,24 @@ def normalise_parcel_cols(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-# Pre-load the example CShape_Vals for the demo user
+# Pre-load parcel data for the demo user.
+# Tries parcel_example.csv first, falls back to final_adjusted.csv.
 DEMO_PARCEL_DATA: pd.DataFrame | None = None
-DEMO_CShape_Vals_PATH = Path(__file__).parent / "data" / "parcel_example.cshape_vals"
-if DEMO_CShape_Vals_PATH.exists():
-    try:
-        df_demo = pd.read_csv(DEMO_CShape_Vals_PATH, dtype=str)
-        DEMO_PARCEL_DATA = normalise_parcel_cols(df_demo)
-        print(f"[startup] demo parcel CShape_Vals loaded: {len(DEMO_PARCEL_DATA)} rows")
-    except Exception as e:
-        print(f"[startup] demo parcel CShape_Vals failed to load: {e}")
+_DEMO_CANDIDATES = [
+    Path(__file__).parent / "data" / "parcel_example.csv",
+    Path(__file__).parent / "data" / "final_adjusted.csv",
+]
+for _demo_path in _DEMO_CANDIDATES:
+    if _demo_path.exists():
+        try:
+            df_demo = pd.read_csv(_demo_path, dtype=str)
+            DEMO_PARCEL_DATA = normalise_parcel_cols(df_demo)
+            print(f"[startup] demo parcel data loaded from {_demo_path.name}: {len(DEMO_PARCEL_DATA)} rows")
+        except Exception as e:
+            print(f"[startup] demo parcel data failed to load from {_demo_path.name}: {e}")
+        break
 else:
-    print(f"[startup] demo parcel CShape_Vals not found at {DEMO_CShape_Vals_PATH}")
+    print("[startup] demo parcel data not found — tried: " + ", ".join(str(p) for p in _DEMO_CANDIDATES))
 
 
 #  Parcel CShape_Vals upload
