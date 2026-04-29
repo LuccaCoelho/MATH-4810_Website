@@ -452,7 +452,7 @@ async def nonlinear_page(request: Request, current_user: CurrentUser):
 
 
 #  Similar houses via KNN on parcel CShape_Vals
-#(I did not use a library here because I don't know the limitations of the free version deployment on render, could've been too heavy) 
+# (I did not use a library here because I don't know the limitations of the free version deployment on render, could've been too heavy) 
 def find_similar(parcel_id: str, df: pd.DataFrame | None = None, n: int = 5) -> list:
     """
     Return up to n similar properties from the uploaded parcel CShape_Vals,
@@ -561,7 +561,6 @@ def predictlinearear(
     }
     feats["Tot Bsmt"] = basement_sqft
     feats["Total Value"] = total_value
-    # NbhdCode2 is now a regular categorical dummy — pass it if present
     if nbhd_code2.strip():
         feats["NbhdCode2"] = nbhd_code2.strip()
 
@@ -589,7 +588,7 @@ def predictlinearear(
             "predicted_price": result["pred"],
             "pi_lo": result["pi_lo"],
             "pi_hi": result["pi_hi"],
-            "top_contributions": result["top_contributions"],   # (name, dollar_float)
+            "top_contributions": result["top_contributions"],
             "is_pct": False,
             "model_type": "Linear (Lasso → OLS)",
             "segment": result["segment_used"],
